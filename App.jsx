@@ -36,8 +36,9 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'prompt-coach-v1'; 
 
-// --- 2. API KEY DE GEMINI ---
-const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
+// --- 2. API KEY DE GEMINI (SEGURA) ---
+// Usamos optional chaining (?.) para evitar errores si import.meta no está definido en algunos entornos
+const GEMINI_API_KEY = import.meta?.env?.VITE_GEMINI_API_KEY || '';
 
 // --- 3. CONTEXTO EMPRESARIAL (ADN ETIXEN) ---
 const COMPANY_CONTEXT = `
@@ -164,7 +165,12 @@ export default function App() {
 
   // Gemini Helper
   const callGemini = async (prompt, systemInstruction = '', isJson = false) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${HARDCODED_API_KEY}`;
+    // Usamos la variable de entorno
+    if (!GEMINI_API_KEY) {
+      throw new Error("Falta la API Key de Gemini. Configura VITE_GEMINI_API_KEY en tu archivo .env o en Vercel.");
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: isJson ? { responseMimeType: "application/json" } : {}
