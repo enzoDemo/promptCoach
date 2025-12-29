@@ -5,8 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    // Actualizamos el target a es2020 para soportar import.meta.env
-    target: 'es2020'
+    target: 'es2020' // <--- ESTO ES CRUCIAL
   },
   optimizeDeps: {
     esbuildOptions: {
