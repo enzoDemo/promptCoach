@@ -179,7 +179,13 @@ export default function App() {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error("Error en Gemini API");
+    if (!res.ok) {
+      // Intentamos obtener el mensaje de error real de la API
+      const errorData = await res.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || `Error ${res.status}: ${res.statusText}`;
+      throw new Error(errorMessage);
+    }
+    
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     return isJson ? JSON.parse(text) : text;
