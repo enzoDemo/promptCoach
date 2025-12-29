@@ -19,23 +19,21 @@ import {
   CheckCircle2, AlertTriangle, ArrowRight, Layout, History, Lightbulb, Award, User
 } from 'lucide-react';
 
-// --- 1. CONFIGURACIÓN DE FIREBASE (¡EDITA ESTO!) ---
-// Ve a https://console.firebase.google.com/ > Tu Proyecto > Configuración del Proyecto
-// Copia y pega los valores aquí.
+// --- 1. CONFIGURACIÓN DE FIREBASE (PRODUCCIÓN) ---
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_DE_FIREBASE_AQUI",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.firebasestorage.app",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: "AIzaSyAJpQoQr11wFQtGfUBw33uLIhDikmT6WO8",
+  authDomain: "prompt-coach-fdcf8.firebaseapp.com",
+  projectId: "prompt-coach-fdcf8",
+  storageBucket: "prompt-coach-fdcf8.firebasestorage.app",
+  messagingSenderId: "818629881362",
+  appId: "1:818629881362:web:761f68b1bba1f56a8772cb"
 };
 
-// Inicialización segura
+// Inicialización
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'prompt-coach-v1'; // Identificador para la DB
+const appId = 'prompt-coach-v1'; 
 
 // --- 2. API KEY DE GEMINI (Hardcoded) ---
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
