@@ -19,7 +19,7 @@ import {
   CheckCircle2, AlertTriangle, ArrowRight, Layout, History, Lightbulb, Award, User
 } from 'lucide-react';
 
-// --- 1. CONFIGURACIÓN DE FIREBASE (PRODUCCIÓN) ---
+// --- 1. CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyAJpQoQr11wFQtGfUBw33uLIhDikmT6WO8",
   authDomain: "prompt-coach-fdcf8.firebaseapp.com",
@@ -35,12 +35,13 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'prompt-coach-v1'; 
 
-// --- 2. API KEY DE GEMINI (Hardcoded) ---
+// --- 2. API KEY DE GEMINI ---
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
 
 // --- Roles & System Prompts ---
+// CORRECCIÓN 2: Cambiamos las claves a minúsculas para que coincidan con los IDs
 const ROLES = {
-  SALES: {
+  sales: {
     id: 'sales',
     label: 'Ventas (CRM)',
     icon: <Briefcase />,
@@ -48,7 +49,7 @@ const ROLES = {
     context: 'Zoho CRM, Gestión de Leads, Pipelines, Correos de venta en frío, Negociación.',
     systemGen: 'Genera una situación difícil y específica para un ejecutivo de ventas que usa Zoho CRM. La situación debe requerir redactar un correo persuasivo a un cliente difícil, o pedirle a la IA que analice datos de ventas complejos. No des la solución.'
   },
-  MARKETING: {
+  marketing: {
     id: 'marketing',
     label: 'Marketing',
     icon: <Megaphone />,
@@ -56,7 +57,7 @@ const ROLES = {
     context: 'Zoho Campaigns, Redes Sociales, Copywriting, Segmentación de audiencia.',
     systemGen: 'Genera un desafío de creatividad para un marketer digital usando Zoho Campaigns. Ejemplo: Crear asuntos para A/B testing, redactar un post para LinkedIn sobre un producto B2B aburrido, o segmentar una audiencia compleja.'
   },
-  SUPPORT: {
+  support: {
     id: 'support',
     label: 'Soporte / IT',
     icon: <Headphones />,
@@ -64,7 +65,7 @@ const ROLES = {
     context: 'Zoho Desk, Google Workspace (Gmail, Drive), Atención al cliente, Resolución de tickets.',
     systemGen: 'Genera un escenario de soporte técnico tenso. Ejemplo: Un cliente VIP enojado por un fallo en Google Workspace o Zoho Desk. El usuario debe usar la IA para redactar una respuesta empática y técnica paso a paso.'
   },
-  DEV: {
+  dev: {
     id: 'dev',
     label: 'Desarrollo',
     icon: <Code2 />,
@@ -92,12 +93,15 @@ export default function App() {
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // Auto-login check
+  // CORRECCIÓN 1: Eliminamos el useEffect que causaba el salto automático al escribir.
+  // Ahora solo verificamos el localStorage al cargar la página por primera vez.
   useEffect(() => {
-    if (username) {
+    const savedUser = localStorage.getItem('pm_username');
+    if (savedUser) {
+      setUsername(savedUser);
       setView('dashboard');
     }
-  }, [username]);
+  }, []);
 
   // History Listener
   useEffect(() => {
@@ -153,7 +157,15 @@ export default function App() {
     setResult(null);
     setUserPrompt('');
     
+    // Ahora ROLES[roleKey] funcionará porque ambos son minúsculas (ej: 'sales')
     const role = ROLES[roleKey];
+    
+    if (!role) {
+      alert("Error: Rol no encontrado");
+      setIsLoading(false);
+      return;
+    }
+
     setSelectedRole(role);
     setView('arena');
 
