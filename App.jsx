@@ -221,7 +221,7 @@ export default function App() {
   const submitPrompt = async () => {
     if (!userPrompt.trim()) return;
     setIsLoading(true);
-    setLoadingText('El Coach Etixen está evaluando tu respuesta...');
+    setLoadingText('El Coach Etixen está evaluando tu prompt...');
 
     try {
       // INSTRUCCIÓN DE SIMULACIÓN (ESTRICTA)
@@ -245,21 +245,26 @@ export default function App() {
         simulationSystemPrompt
       );
 
-      // INSTRUCCIÓN DE COACHING (CONTEXTO EMPRESA)
+      // INSTRUCCIÓN DE COACHING (METODOLOGÍA RICF)
       const coachPrompt = `
         Contexto Empresa: ${COMPANY_CONTEXT}
         Escenario: ${currentScenario}
         Prompt del Usuario: "${userPrompt}"
         
-        Tarea: Evalúa el prompt del usuario.
-        1. ¿Se ajusta al tono de Etixen (Cercano/Profesional)?
-        2. ¿Resolvió la tarea específica del escenario?
-        3. ¿Fue específico con los datos técnicos?
+        Tarea: Evalúa el prompt del usuario basándote en la estructura de los 4 PILARES DEL PROMPTING (RICF).
+        
+        CRITERIOS DE EVALUACIÓN OBLIGATORIOS:
+        1. ROL: ¿Definió quién debe ser la IA? (Ej: "Eres un experto en Zoho Creator", "Actúa como un agente de soporte empático").
+        2. INSTRUCCIÓN: ¿Usó un verbo de acción claro y específico? (Ej: "Redacta", "Analiza", "Resume").
+        3. CONTEXTO: ¿Proveyó la información de fondo, audiencia y objetivo? (Ej: "Es para un cliente enojado", "El objetivo es vender la licencia").
+        4. FORMATO DE SALIDA: ¿Especificó cómo quiere la entrega? (Ej: "Lista de 3 puntos", "Tono formal", "JSON", "Menos de 50 palabras").
+
+        Si falta alguno de estos 4 elementos, baja el puntaje drásticamente y menciónalo explícitamente en la crítica.
         
         Salida JSON: { "score": number, "critique": string, "improved_prompt": string, "explanation": string }
       `;
       
-      const coachPromise = callGemini(coachPrompt, "Eres un Mentor Senior en Etixen SRL. Evalúa con criterio profesional.", true);
+      const coachPromise = callGemini(coachPrompt, "Eres un Mentor Senior en Ingeniería de Prompts en Etixen SRL.", true);
 
       const [simResponse, coachAnalysis] = await Promise.all([simulationPromise, coachPromise]);
 
