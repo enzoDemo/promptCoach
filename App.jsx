@@ -348,8 +348,8 @@ export default function App() {
         )}
 
         {view === 'arena' && (
-          <div className="flex-1 flex flex-col h-full overflow-hidden animate-in slide-in-from-right-8 duration-500">
-            <div className="bg-slate-900 border-b border-slate-800 p-6 shadow-sm shrink-0">
+          <div className="flex-1 h-full overflow-y-auto animate-in slide-in-from-right-8 duration-500 bg-slate-950">
+            <div className="bg-slate-900 border-b border-slate-800 p-6 shadow-sm">
               <div className="max-w-5xl mx-auto">
                 <div className="flex items-center gap-2 mb-3">
                    <button onClick={() => setView('dashboard')} className="text-slate-500 hover:text-white transition-colors flex items-center gap-1 text-sm font-medium">
@@ -369,7 +369,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
+            <div className="p-6">
               <div className="max-w-5xl mx-auto space-y-8 pb-20">
                 {!result && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
