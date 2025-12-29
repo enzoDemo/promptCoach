@@ -40,21 +40,25 @@ const appId = 'prompt-coach-v1';
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
 
 // --- PROMPTS DE GENERACIÓN AVANZADOS ---
+// MODIFICADO: Instrucciones para reducir complejidad drásticamente
 const BASE_INSTRUCTION = `
-  Genera un escenario de entrenamiento detallado.
+  Genera un MICRO-ESCENARIO de entrenamiento (Nivel Principiante).
+  La situación debe ser simple, directa y enfocada en UNA sola tarea.
+  NO pidas múltiples pasos complejos.
+  
   ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (Usa Markdown estándar):
   
   ### Contexto
-  [Describe quién es el usuario y qué problema reportó el cliente o jefe inicialmente]
+  [Breve descripción del problema en 1 o 2 frases máximo]
 
-  ### El Hallazgo (Investigación)
-  [Describe qué descubrió el usuario tras investigar. Causa raíz, datos ocultos, logs, etc.]
+  ### El Dato Clave
+  [Breve hallazgo. Ej: "El cliente X está enojado por Y"]
 
   ### Datos Adjuntos
-  [Genera un bloque de código (usando triple backticks) con datos simulados realistas que respalden el hallazgo (CSV, JSON, XML o Log). El usuario deberá usar estos datos en su prompt]
+  [Genera un bloque de código PEQUEÑO y simple (CSV, JSON o Log) con 2 o 3 líneas de datos simulados necesarios para la tarea]
 
   ### Tu Misión
-  [Define qué debe lograr el usuario. Ej: Redactar un correo explicando esto, crear un reporte, o pedirle a la IA que analice el adjunto]
+  [Define UNA sola acción concreta. Ej: "Escribe UN correo de disculpa" o "Pide a la IA que extraiga el nombre del cliente". Sé específico pero simple]
 `;
 
 const ROLES = {
@@ -64,7 +68,7 @@ const ROLES = {
     icon: <Briefcase />,
     color: 'from-blue-600 to-cyan-500',
     context: 'Zoho CRM, Ventas B2B.',
-    systemGen: `Actúa como Gerente de Ventas usando Zoho CRM. ${BASE_INSTRUCTION} Ejemplo de datos: Un CSV con leads duplicados o historial de compras.`
+    systemGen: `Actúa como Gerente de Ventas. ${BASE_INSTRUCTION} Ejemplo simple: Un cliente pide descuento y hay que redactar una respuesta negándolo educadamente.`
   },
   marketing: {
     id: 'marketing',
@@ -72,7 +76,7 @@ const ROLES = {
     icon: <Megaphone />,
     color: 'from-pink-600 to-rose-500',
     context: 'Zoho Campaigns, Marketing Digital.',
-    systemGen: `Actúa como Director de Marketing usando Zoho Campaigns. ${BASE_INSTRUCTION} Ejemplo de datos: Tabla con métricas de Open Rate bajas o JSON de segmentación fallida.`
+    systemGen: `Actúa como Director de Marketing. ${BASE_INSTRUCTION} Ejemplo simple: Generar 3 ideas de Asunto para un correo de bienvenida.`
   },
   support: {
     id: 'support',
@@ -80,15 +84,15 @@ const ROLES = {
     icon: <Headphones />,
     color: 'from-violet-600 to-purple-500',
     context: 'Zoho Desk, Google Workspace.',
-    systemGen: `Actúa como Coordinador de Soporte Técnico. ${BASE_INSTRUCTION} Ejemplo de datos: Un Log de error del servidor, cabeceras de correo (headers) o configuración DNS.`
+    systemGen: `Actúa como Soporte Técnico. ${BASE_INSTRUCTION} Ejemplo simple: Explicar a un usuario por qué su correo rebotó basándose en un log de error 550.`
   },
   dev: {
     id: 'dev',
     label: 'Desarrollo',
     icon: <Code2 />,
     color: 'from-emerald-600 to-green-500',
-    context: 'Zoho Creator, Deluge, API Integrations.',
-    systemGen: `Actúa como Lead Developer. ${BASE_INSTRUCTION} Ejemplo de datos: Un snippet de código Deluge con un error lógico o una respuesta JSON de API con error 400.`
+    context: 'Zoho Creator, Deluge.',
+    systemGen: `Actúa como Lead Developer. ${BASE_INSTRUCTION} Ejemplo simple: Corregir un error de sintaxis en 3 líneas de código Deluge.`
   }
 };
 
@@ -168,7 +172,7 @@ export default function App() {
 
   const generateScenario = async (roleKey) => {
     setIsLoading(true);
-    setLoadingText('Analizando logs y generando caso realista...');
+    setLoadingText('Generando micro-desafío...');
     setResult(null);
     setUserPrompt('');
     
@@ -180,7 +184,7 @@ export default function App() {
 
     try {
       const scenarioText = await callGemini(
-        "Genera un nuevo escenario ahora.", 
+        "Genera un nuevo escenario simple ahora.", 
         role.systemGen
       );
       setCurrentScenario(scenarioText);
@@ -197,20 +201,37 @@ export default function App() {
     setLoadingText('Evaluando tu solución...');
 
     try {
+      // MODIFICADO: Instrucción estricta para evitar que la IA "haga trampa" y complete información.
+      const simulationSystemPrompt = `
+        Actúa como una IA asistente o la herramienta a la que se dirige el usuario.
+        
+        CONTEXTO DE FONDO (Solo para que tengas los datos técnicos correctos, NO para inferir la tarea):
+        ${currentScenario}
+        
+        INSTRUCCIÓN CRÍTICA:
+        Debes obedecer EL PROMPT DEL USUARIO de forma LITERAL y ESTRICTA.
+        - NO asumas tareas que venían en la misión original si el usuario NO las escribió en su prompt.
+        - Si el usuario pide "un correo" y la misión decía "dos", tú generas SOLO UNO.
+        - Si el usuario olvida mencionar un dato clave, tú genera una respuesta genérica o incompleta (como lo haría una IA real sin contexto).
+        - No seas proactivo. Sé reactivo al prompt escrito.
+      `;
+
       const simulationPromise = callGemini(
         userPrompt, 
-        `Actúa como la herramienta o persona a la que se dirige el usuario. Contexto: ${currentScenario}. Responde al prompt del usuario de forma realista.`
+        simulationSystemPrompt
       );
 
       const coachPrompt = `
         Contexto del Escenario: ${currentScenario}
         Prompt del Usuario: "${userPrompt}"
         
-        Evalúa si el usuario resolvió la misión y usó correctamente los datos adjuntos si existían.
+        Tarea: Evalúa si el usuario resolvió la misión explícitamente.
+        Si la IA simulada tuvo que "adivinar" o si el usuario olvidó partes de la misión, bájale el puntaje.
+        
         Salida JSON: { "score": number, "critique": string, "improved_prompt": string, "explanation": string }
       `;
       
-      const coachPromise = callGemini(coachPrompt, "Eres un Coach experto. Sé crítico pero constructivo.", true);
+      const coachPromise = callGemini(coachPrompt, "Eres un Coach experto. Sé crítico con la especificidad.", true);
 
       const [simResponse, coachAnalysis] = await Promise.all([simulationPromise, coachPromise]);
 
@@ -244,8 +265,6 @@ export default function App() {
   };
 
   // Componente para renderizar Markdown con estilo consistente
-  // NOTA: Se ha eliminado remarkGfm para evitar errores de compilación, 
-  // pero react-markdown procesará correctamente negritas, listas y bloques de código.
   const MarkdownRenderer = ({ content }) => (
     <ReactMarkdown 
       components={{
@@ -266,7 +285,6 @@ export default function App() {
             </code>
           )
         },
-        // Estilos básicos para tablas si el markdown las genera
         table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="min-w-full text-left text-sm whitespace-nowrap" {...props} /></div>,
         th: ({node, ...props}) => <th className="bg-slate-800 font-semibold p-2 border-b border-slate-700 text-slate-200" {...props} />,
         td: ({node, ...props}) => <td className="p-2 border-b border-slate-800 text-slate-400" {...props} />,
@@ -337,7 +355,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-8 animate-in fade-in duration-500">
             <div className="max-w-5xl mx-auto">
               <h2 className="text-3xl font-bold mb-2 text-white">Selecciona tu Área</h2>
-              <p className="text-slate-400 mb-10 text-lg">Entrena con situaciones reales que incluyen logs, datos y contextos complejos.</p>
+              <p className="text-slate-400 mb-10 text-lg">Entrena con micro-desafíos enfocados en tareas específicas.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                 {Object.values(ROLES).map((role) => (
                   <button
