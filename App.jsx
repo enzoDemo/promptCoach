@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-// Eliminamos remark-gfm para asegurar compatibilidad en la compilación
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -36,9 +35,17 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'prompt-coach-v1'; 
 
-// --- 2. API KEY DE GEMINI (SEGURA) ---
-// Usamos optional chaining (?.) para evitar errores si import.meta no está definido en algunos entornos
-const GEMINI_API_KEY = import.meta?.env?.VITE_GEMINI_API_KEY || '';
+// --- 2. API KEY DE GEMINI (CON DIAGNÓSTICO) ---
+// Intentamos leer la variable de diferentes formas para asegurar compatibilidad
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+// DIAGNÓSTICO: Esto aparecerá en la consola del navegador (F12)
+console.log("--- DIAGNÓSTICO DE API KEY ---");
+console.log("¿Existe import.meta.env?", !!import.meta.env);
+console.log("¿Está definida la Key?", !!GEMINI_API_KEY);
+// Imprimimos solo los primeros 5 caracteres para verificar si es la correcta sin exponerla toda
+console.log("Primeros caracteres:", GEMINI_API_KEY ? GEMINI_API_KEY.substring(0, 5) + "..." : "VACÍA");
+console.log("------------------------------");
 
 // --- 3. CONTEXTO EMPRESARIAL (ADN ETIXEN) ---
 const COMPANY_CONTEXT = `
@@ -165,9 +172,9 @@ export default function App() {
 
   // Gemini Helper
   const callGemini = async (prompt, systemInstruction = '', isJson = false) => {
-    // Usamos la variable de entorno
     if (!GEMINI_API_KEY) {
-      throw new Error("Falta la API Key de Gemini. Configura VITE_GEMINI_API_KEY en tu archivo .env o en Vercel.");
+      console.error("Intento de llamada a API fallido: Key no encontrada");
+      throw new Error(`Falta la API Key. Diagnóstico: Key definida? ${!!GEMINI_API_KEY}`);
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
@@ -186,7 +193,6 @@ export default function App() {
     });
 
     if (!res.ok) {
-      // Intentamos obtener el mensaje de error real de la API
       const errorData = await res.json().catch(() => ({}));
       const errorMessage = errorData.error?.message || `Error ${res.status}: ${res.statusText}`;
       throw new Error(errorMessage);
@@ -224,7 +230,7 @@ export default function App() {
       );
       setCurrentScenario(scenarioText);
     } catch (e) {
-      alert("Error generando escenario: " + e.message);
+      alert("Error: " + e.message);
     } finally {
       setIsLoading(false);
     }
@@ -303,7 +309,7 @@ export default function App() {
 
     } catch (e) {
       console.error(e);
-      alert("Error en el análisis: " + e.message);
+      alert("Error: " + e.message);
     } finally {
       setIsLoading(false);
     }
