@@ -39,60 +39,83 @@ const appId = 'prompt-coach-v1';
 // --- 2. API KEY DE GEMINI ---
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
 
+// --- 3. CONTEXTO EMPRESARIAL (ADN ETIXEN) ---
+const COMPANY_CONTEXT = `
+  EMPRESA: Etixen SRL.
+  RUBRO: Consultora IT.
+  PRODUCTOS: Google Workspace, Zoho (toda la suite), Desarrollos a medida, Integraciones (ej: Zoho Books Argentina).
+  TONO: Cercano pero profesional. Técnico pero accesible.
+  MISIÓN: Ayudar a empresas a implementar soluciones tecnológicas eficientes.
+`;
+
 // --- PROMPTS DE GENERACIÓN AVANZADOS ---
-// MODIFICADO: Instrucciones para reducir complejidad drásticamente
 const BASE_INSTRUCTION = `
-  Genera un MICRO-ESCENARIO de entrenamiento (Nivel Principiante).
-  La situación debe ser simple, directa y enfocada en UNA sola tarea.
-  NO pidas múltiples pasos complejos.
+  Genera un MICRO-ESCENARIO de entrenamiento (Nivel Realista pero Breve).
+  
+  REGLAS DE ORO:
+  1. Usa el CONTEXTO DE EMPRESA proveído. El problema debe ser algo que pasaría en Etixen SRL mañana mismo.
+  2. La situación debe ser simple y enfocada en UNA sola tarea clave.
+  3. Incluye datos técnicos simulados si aplica (Logs, JSON, correos del cliente).
   
   ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (Usa Markdown estándar):
   
-  ### Contexto
-  [Breve descripción del problema en 1 o 2 frases máximo]
+  ### Contexto Etixen
+  [Breve descripción del problema. Ej: "Un cliente de Zoho Books tiene problemas con la factura electrónica..."]
 
-  ### El Dato Clave
-  [Breve hallazgo. Ej: "El cliente X está enojado por Y"]
+  ### El Dato/Evidencia
+  [El hallazgo o el mensaje del cliente. Ej: "El cliente envió este error..." o "El cliente dijo: ..."]
 
   ### Datos Adjuntos
-  [Genera un bloque de código PEQUEÑO y simple (CSV, JSON o Log) con 2 o 3 líneas de datos simulados necesarios para la tarea]
+  [Genera un bloque de código PEQUEÑO (CSV, JSON, Log o Texto de correo) necesario para resolver la tarea]
 
   ### Tu Misión
-  [Define UNA sola acción concreta. Ej: "Escribe UN correo de disculpa" o "Pide a la IA que extraiga el nombre del cliente". Sé específico pero simple]
+  [Define UNA acción concreta. Ej: "Redacta la respuesta técnica explicando el error" o "Pide a la IA que genere el script de corrección". Sé específico.]
 `;
 
 const ROLES = {
   sales: {
     id: 'sales',
-    label: 'Ventas (CRM)',
+    label: 'Ventas (Comercial)',
     icon: <Briefcase />,
     color: 'from-blue-600 to-cyan-500',
-    context: 'Zoho CRM, Ventas B2B.',
-    systemGen: `Actúa como Gerente de Ventas. ${BASE_INSTRUCTION} Ejemplo simple: Un cliente pide descuento y hay que redactar una respuesta negándolo educadamente.`
+    context: 'Venta de Licencias Google/Zoho, Servicios de Implementación.',
+    systemGen: `Actúa como Gerente Comercial de Etixen SRL.
+    Contexto: ${COMPANY_CONTEXT}
+    Temas típicos: Correos de seguimiento a leads fríos, propuestas comerciales complejas (Zoho One + Implementación), manejo de objeciones de precio vs competencia.
+    ${BASE_INSTRUCTION}`
   },
   marketing: {
     id: 'marketing',
     label: 'Marketing',
     icon: <Megaphone />,
     color: 'from-pink-600 to-rose-500',
-    context: 'Zoho Campaigns, Marketing Digital.',
-    systemGen: `Actúa como Director de Marketing. ${BASE_INSTRUCTION} Ejemplo simple: Generar 3 ideas de Asunto para un correo de bienvenida.`
+    context: 'Generación de Demanda, Comunicación de Novedades.',
+    systemGen: `Actúa como Lead de Marketing de Etixen SRL.
+    Contexto: ${COMPANY_CONTEXT}
+    Temas típicos: Invitar a Webinars sobre novedades de Google/Zoho, redactar Newsletters semanales de valor, crear Casos de Éxito de implementaciones recientes.
+    ${BASE_INSTRUCTION}`
   },
   support: {
     id: 'support',
-    label: 'Soporte / IT',
+    label: 'Soporte Técnico',
     icon: <Headphones />,
     color: 'from-violet-600 to-purple-500',
-    context: 'Zoho Desk, Google Workspace.',
-    systemGen: `Actúa como Soporte Técnico. ${BASE_INSTRUCTION} Ejemplo simple: Explicar a un usuario por qué su correo rebotó basándose en un log de error 550.`
+    context: 'Soporte Google Workspace, Zoho y Desarrollos propios.',
+    systemGen: `Actúa como Coordinador de Soporte de Etixen SRL.
+    Contexto: ${COMPANY_CONTEXT}
+    Temas típicos: Explicar configuraciones DNS/MX a usuarios no técnicos, calmar a un cliente cuando se cae un servicio (Google/Zoho), troubleshooting de correos rebotados.
+    ${BASE_INSTRUCTION}`
   },
   dev: {
     id: 'dev',
-    label: 'Desarrollo',
+    label: 'Desarrollo / IT',
     icon: <Code2 />,
     color: 'from-emerald-600 to-green-500',
-    context: 'Zoho Creator, Deluge.',
-    systemGen: `Actúa como Lead Developer. ${BASE_INSTRUCTION} Ejemplo simple: Corregir un error de sintaxis en 3 líneas de código Deluge.`
+    context: 'Zoho Creator, Deluge Script, Integraciones API.',
+    systemGen: `Actúa como Líder Técnico de Etixen SRL.
+    Contexto: ${COMPANY_CONTEXT}
+    Temas típicos: Debugging de la integración propia de Zoho Books Argentina, scripts de automatización en Deluge, conexión con APIs externas, apps con IA.
+    ${BASE_INSTRUCTION}`
   }
 };
 
@@ -172,7 +195,7 @@ export default function App() {
 
   const generateScenario = async (roleKey) => {
     setIsLoading(true);
-    setLoadingText('Generando micro-desafío...');
+    setLoadingText('Analizando contexto de Etixen SRL...');
     setResult(null);
     setUserPrompt('');
     
@@ -198,22 +221,23 @@ export default function App() {
   const submitPrompt = async () => {
     if (!userPrompt.trim()) return;
     setIsLoading(true);
-    setLoadingText('Evaluando tu solución...');
+    setLoadingText('El Coach Etixen está evaluando tu respuesta...');
 
     try {
-      // MODIFICADO: Instrucción estricta para evitar que la IA "haga trampa" y complete información.
+      // INSTRUCCIÓN DE SIMULACIÓN (ESTRICTA)
       const simulationSystemPrompt = `
-        Actúa como una IA asistente o la herramienta a la que se dirige el usuario.
+        Actúa como una IA asistente o la herramienta a la que se dirige el usuario en el contexto de Etixen SRL.
         
-        CONTEXTO DE FONDO (Solo para que tengas los datos técnicos correctos, NO para inferir la tarea):
+        CONTEXTO TÉCNICO DEL ESCENARIO:
         ${currentScenario}
         
-        INSTRUCCIÓN CRÍTICA:
-        Debes obedecer EL PROMPT DEL USUARIO de forma LITERAL y ESTRICTA.
-        - NO asumas tareas que venían en la misión original si el usuario NO las escribió en su prompt.
-        - Si el usuario pide "un correo" y la misión decía "dos", tú generas SOLO UNO.
-        - Si el usuario olvida mencionar un dato clave, tú genera una respuesta genérica o incompleta (como lo haría una IA real sin contexto).
-        - No seas proactivo. Sé reactivo al prompt escrito.
+        INSTRUCCIONES CRÍTICAS DE RESPUESTA:
+        1. LITERALIDAD EXTREMA: Solo haz lo que el prompt pide explícitamente.
+           - Si pide "un correo", escribe solo uno.
+           - Si no especifica "tono cercano", usa un tono robótico/genérico por defecto.
+           - Si olvida adjuntar los datos del escenario (copiar/pegar), responde que te faltan datos.
+        2. NO COMPLETES INFORMACIÓN: Si el usuario es vago, tu respuesta debe ser vaga o incompleta.
+        3. OBJETIVO: Demostrarle al usuario que si pide mal, obtiene malos resultados.
       `;
 
       const simulationPromise = callGemini(
@@ -221,17 +245,21 @@ export default function App() {
         simulationSystemPrompt
       );
 
+      // INSTRUCCIÓN DE COACHING (CONTEXTO EMPRESA)
       const coachPrompt = `
-        Contexto del Escenario: ${currentScenario}
+        Contexto Empresa: ${COMPANY_CONTEXT}
+        Escenario: ${currentScenario}
         Prompt del Usuario: "${userPrompt}"
         
-        Tarea: Evalúa si el usuario resolvió la misión explícitamente.
-        Si la IA simulada tuvo que "adivinar" o si el usuario olvidó partes de la misión, bájale el puntaje.
+        Tarea: Evalúa el prompt del usuario.
+        1. ¿Se ajusta al tono de Etixen (Cercano/Profesional)?
+        2. ¿Resolvió la tarea específica del escenario?
+        3. ¿Fue específico con los datos técnicos?
         
         Salida JSON: { "score": number, "critique": string, "improved_prompt": string, "explanation": string }
       `;
       
-      const coachPromise = callGemini(coachPrompt, "Eres un Coach experto. Sé crítico con la especificidad.", true);
+      const coachPromise = callGemini(coachPrompt, "Eres un Mentor Senior en Etixen SRL. Evalúa con criterio profesional.", true);
 
       const [simResponse, coachAnalysis] = await Promise.all([simulationPromise, coachPromise]);
 
@@ -276,7 +304,7 @@ export default function App() {
         code: ({node, inline, className, children, ...props}) => {
           return !inline ? (
             <div className="bg-slate-950 rounded-lg border border-slate-800 p-4 my-4 font-mono text-xs text-blue-300 overflow-x-auto shadow-inner relative group">
-              <div className="absolute top-2 right-2 opacity-50 text-[10px] uppercase tracking-wider text-slate-500">Archivo Simulado</div>
+              <div className="absolute top-2 right-2 opacity-50 text-[10px] uppercase tracking-wider text-slate-500">Dato Simulado</div>
               <pre {...props}>{children}</pre>
             </div>
           ) : (
@@ -303,8 +331,8 @@ export default function App() {
               <Zap size={32} />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-center mb-2">Prompt Coach</h1>
-          <p className="text-slate-400 text-center mb-8 text-sm">Entrenamiento de IA para equipos de alto rendimiento.</p>
+          <h1 className="text-2xl font-bold text-center mb-2">Etixen Coach</h1>
+          <p className="text-slate-400 text-center mb-8 text-sm">Entrenamiento de IA especializado para nuestro equipo.</p>
           <div className="space-y-6">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Nombre de Usuario</label>
@@ -337,7 +365,7 @@ export default function App() {
       <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0 backdrop-blur-sm z-50">
         <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setView('dashboard')}>
           <Zap className="text-blue-500" />
-          <span className="font-bold text-lg tracking-tight">Prompt Coach</span>
+          <span className="font-bold text-lg tracking-tight">Etixen Coach</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right hidden md:block">
@@ -355,7 +383,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-8 animate-in fade-in duration-500">
             <div className="max-w-5xl mx-auto">
               <h2 className="text-3xl font-bold mb-2 text-white">Selecciona tu Área</h2>
-              <p className="text-slate-400 mb-10 text-lg">Entrena con micro-desafíos enfocados en tareas específicas.</p>
+              <p className="text-slate-400 mb-10 text-lg">Situaciones reales de Etixen SRL para entrenar tus habilidades.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                 {Object.values(ROLES).map((role) => (
                   <button
@@ -370,7 +398,7 @@ export default function App() {
                     <h3 className="text-xl font-bold mb-2 text-white">{role.label}</h3>
                     <p className="text-sm text-slate-400 leading-relaxed">{role.context}</p>
                     <div className="mt-6 flex items-center text-blue-400 text-sm font-bold opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-                      INICIAR RETO <ArrowRight size={16} className="ml-2" />
+                      INICIAR ESCENARIO <ArrowRight size={16} className="ml-2" />
                     </div>
                   </button>
                 ))}
@@ -432,7 +460,7 @@ export default function App() {
                       <textarea 
                         value={userPrompt}
                         onChange={e => setUserPrompt(e.target.value)}
-                        placeholder={`Escribe tu prompt para resolver el caso. \n\nPuedes copiar y pegar los datos del archivo simulado si es necesario...`}
+                        placeholder={`Escribe tu prompt para resolver el caso de Etixen. \n\nPuedes copiar y pegar los datos del archivo simulado si es necesario...`}
                         className="w-full min-h-[200px] bg-slate-950 rounded-xl p-6 text-slate-200 focus:outline-none resize-none text-base leading-relaxed placeholder:text-slate-600 font-mono"
                       />
                       <div className="p-3 flex justify-between items-center bg-slate-900 rounded-b-xl border-t border-slate-800">
