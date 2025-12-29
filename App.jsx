@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+// Eliminamos remark-gfm para asegurar compatibilidad en la compilación
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -16,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Briefcase, Code2, Headphones, Megaphone, Zap, Send, RefreshCw, 
-  CheckCircle2, AlertTriangle, ArrowRight, Layout, History, Lightbulb, Award, User
+  CheckCircle2, AlertTriangle, ArrowRight, Layout, History, Lightbulb, Award, User, FileText
 } from 'lucide-react';
 
 // --- 1. CONFIGURACIÓN DE FIREBASE ---
@@ -29,7 +31,6 @@ const firebaseConfig = {
   appId: "1:818629881362:web:761f68b1bba1f56a8772cb"
 };
 
-// Inicialización
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -38,40 +39,56 @@ const appId = 'prompt-coach-v1';
 // --- 2. API KEY DE GEMINI ---
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
 
-// --- Roles & System Prompts ---
-// CORRECCIÓN 2: Cambiamos las claves a minúsculas para que coincidan con los IDs
+// --- PROMPTS DE GENERACIÓN AVANZADOS ---
+const BASE_INSTRUCTION = `
+  Genera un escenario de entrenamiento detallado.
+  ESTRUCTURA OBLIGATORIA DE LA RESPUESTA (Usa Markdown estándar):
+  
+  ### Contexto
+  [Describe quién es el usuario y qué problema reportó el cliente o jefe inicialmente]
+
+  ### El Hallazgo (Investigación)
+  [Describe qué descubrió el usuario tras investigar. Causa raíz, datos ocultos, logs, etc.]
+
+  ### Datos Adjuntos
+  [Genera un bloque de código (usando triple backticks) con datos simulados realistas que respalden el hallazgo (CSV, JSON, XML o Log). El usuario deberá usar estos datos en su prompt]
+
+  ### Tu Misión
+  [Define qué debe lograr el usuario. Ej: Redactar un correo explicando esto, crear un reporte, o pedirle a la IA que analice el adjunto]
+`;
+
 const ROLES = {
   sales: {
     id: 'sales',
     label: 'Ventas (CRM)',
     icon: <Briefcase />,
     color: 'from-blue-600 to-cyan-500',
-    context: 'Zoho CRM, Gestión de Leads, Pipelines, Correos de venta en frío, Negociación.',
-    systemGen: 'Genera una situación difícil y específica para un ejecutivo de ventas que usa Zoho CRM. La situación debe requerir redactar un correo persuasivo a un cliente difícil, o pedirle a la IA que analice datos de ventas complejos. No des la solución.'
+    context: 'Zoho CRM, Ventas B2B.',
+    systemGen: `Actúa como Gerente de Ventas usando Zoho CRM. ${BASE_INSTRUCTION} Ejemplo de datos: Un CSV con leads duplicados o historial de compras.`
   },
   marketing: {
     id: 'marketing',
     label: 'Marketing',
     icon: <Megaphone />,
     color: 'from-pink-600 to-rose-500',
-    context: 'Zoho Campaigns, Redes Sociales, Copywriting, Segmentación de audiencia.',
-    systemGen: 'Genera un desafío de creatividad para un marketer digital usando Zoho Campaigns. Ejemplo: Crear asuntos para A/B testing, redactar un post para LinkedIn sobre un producto B2B aburrido, o segmentar una audiencia compleja.'
+    context: 'Zoho Campaigns, Marketing Digital.',
+    systemGen: `Actúa como Director de Marketing usando Zoho Campaigns. ${BASE_INSTRUCTION} Ejemplo de datos: Tabla con métricas de Open Rate bajas o JSON de segmentación fallida.`
   },
   support: {
     id: 'support',
     label: 'Soporte / IT',
     icon: <Headphones />,
     color: 'from-violet-600 to-purple-500',
-    context: 'Zoho Desk, Google Workspace (Gmail, Drive), Atención al cliente, Resolución de tickets.',
-    systemGen: 'Genera un escenario de soporte técnico tenso. Ejemplo: Un cliente VIP enojado por un fallo en Google Workspace o Zoho Desk. El usuario debe usar la IA para redactar una respuesta empática y técnica paso a paso.'
+    context: 'Zoho Desk, Google Workspace.',
+    systemGen: `Actúa como Coordinador de Soporte Técnico. ${BASE_INSTRUCTION} Ejemplo de datos: Un Log de error del servidor, cabeceras de correo (headers) o configuración DNS.`
   },
   dev: {
     id: 'dev',
     label: 'Desarrollo',
     icon: <Code2 />,
     color: 'from-emerald-600 to-green-500',
-    context: 'Zoho Creator, Deluge Script, Integraciones API, Google Apps Script.',
-    systemGen: 'Genera un problema técnico que requiera generar código. Ejemplo: "Necesito un script en Deluge para Zoho Creator que actualice X campo cuando Y sucede". El desafío es que la petición inicial suele ser vaga y necesita especificaciones técnicas.'
+    context: 'Zoho Creator, Deluge, API Integrations.',
+    systemGen: `Actúa como Lead Developer. ${BASE_INSTRUCTION} Ejemplo de datos: Un snippet de código Deluge con un error lógico o una respuesta JSON de API con error 400.`
   }
 };
 
@@ -93,8 +110,6 @@ export default function App() {
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // CORRECCIÓN 1: Eliminamos el useEffect que causaba el salto automático al escribir.
-  // Ahora solo verificamos el localStorage al cargar la página por primera vez.
   useEffect(() => {
     const savedUser = localStorage.getItem('pm_username');
     if (savedUser) {
@@ -153,26 +168,20 @@ export default function App() {
 
   const generateScenario = async (roleKey) => {
     setIsLoading(true);
-    setLoadingText('Analizando contexto y generando desafío...');
+    setLoadingText('Analizando logs y generando caso realista...');
     setResult(null);
     setUserPrompt('');
     
-    // Ahora ROLES[roleKey] funcionará porque ambos son minúsculas (ej: 'sales')
     const role = ROLES[roleKey];
-    
-    if (!role) {
-      alert("Error: Rol no encontrado");
-      setIsLoading(false);
-      return;
-    }
+    if (!role) { alert("Error: Rol no encontrado"); setIsLoading(false); return; }
 
     setSelectedRole(role);
     setView('arena');
 
     try {
       const scenarioText = await callGemini(
-        "Genera un escenario ahora.", 
-        role.systemGen + " El formato de salida debe ser solo el texto descriptivo del problema."
+        "Genera un nuevo escenario ahora.", 
+        role.systemGen
       );
       setCurrentScenario(scenarioText);
     } catch (e) {
@@ -185,33 +194,29 @@ export default function App() {
   const submitPrompt = async () => {
     if (!userPrompt.trim()) return;
     setIsLoading(true);
-    setLoadingText('El Coach está analizando tu estrategia...');
+    setLoadingText('Evaluando tu solución...');
 
     try {
       const simulationPromise = callGemini(
         userPrompt, 
-        `Actúa como la herramienta o persona a la que se dirige el usuario en este contexto: ${selectedRole.context}. Contexto del escenario: ${currentScenario}. Responde a su prompt tal cual, sin corregirlos.`
+        `Actúa como la herramienta o persona a la que se dirige el usuario. Contexto: ${currentScenario}. Responde al prompt del usuario de forma realista.`
       );
 
       const coachPrompt = `
-        Escenario: ${currentScenario}
+        Contexto del Escenario: ${currentScenario}
         Prompt del Usuario: "${userPrompt}"
-        Rol del Usuario: ${selectedRole.label}
-        Tarea:
-        1. Evalúa el prompt del 1 al 100.
-        2. Identifica 2 fortalezas y 2 debilidades.
-        3. Reescribe el prompt para que sea PERFECTO (Expert Level).
-        4. Explica POR QUÉ el nuevo prompt es mejor.
+        
+        Evalúa si el usuario resolvió la misión y usó correctamente los datos adjuntos si existían.
         Salida JSON: { "score": number, "critique": string, "improved_prompt": string, "explanation": string }
       `;
       
-      const coachPromise = callGemini(coachPrompt, "Eres un experto Ingeniero de Prompts.", true);
+      const coachPromise = callGemini(coachPrompt, "Eres un Coach experto. Sé crítico pero constructivo.", true);
 
       const [simResponse, coachAnalysis] = await Promise.all([simulationPromise, coachPromise]);
 
       const improvedSimResponse = await callGemini(
         coachAnalysis.improved_prompt,
-        `Actúa como la herramienta o persona a la que se dirige el usuario en este contexto: ${selectedRole.context}. Contexto del escenario: ${currentScenario}.`
+        `Actúa como la herramienta/persona del escenario. Contexto: ${currentScenario}.`
       );
 
       setResult({
@@ -223,7 +228,7 @@ export default function App() {
       if (user) {
         await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'scenarios'), {
           role: selectedRole.label,
-          scenario: currentScenario,
+          scenario: currentScenario, 
           userPrompt: userPrompt,
           coachData: coachAnalysis,
           timestamp: serverTimestamp()
@@ -237,6 +242,39 @@ export default function App() {
       setIsLoading(false);
     }
   };
+
+  // Componente para renderizar Markdown con estilo consistente
+  // NOTA: Se ha eliminado remarkGfm para evitar errores de compilación, 
+  // pero react-markdown procesará correctamente negritas, listas y bloques de código.
+  const MarkdownRenderer = ({ content }) => (
+    <ReactMarkdown 
+      components={{
+        h3: ({node, ...props}) => <h3 className="text-lg font-bold text-white mt-4 mb-2 uppercase tracking-wide flex items-center gap-2 border-b border-slate-700 pb-1" {...props} />,
+        p: ({node, ...props}) => <p className="text-slate-300 mb-3 leading-relaxed" {...props} />,
+        ul: ({node, ...props}) => <ul className="list-disc list-inside text-slate-300 mb-4 space-y-1" {...props} />,
+        li: ({node, ...props}) => <li className="ml-2" {...props} />,
+        strong: ({node, ...props}) => <strong className="text-blue-200 font-bold" {...props} />,
+        code: ({node, inline, className, children, ...props}) => {
+          return !inline ? (
+            <div className="bg-slate-950 rounded-lg border border-slate-800 p-4 my-4 font-mono text-xs text-blue-300 overflow-x-auto shadow-inner relative group">
+              <div className="absolute top-2 right-2 opacity-50 text-[10px] uppercase tracking-wider text-slate-500">Archivo Simulado</div>
+              <pre {...props}>{children}</pre>
+            </div>
+          ) : (
+            <code className="bg-slate-800 px-1 py-0.5 rounded text-blue-200 font-mono text-sm" {...props}>
+              {children}
+            </code>
+          )
+        },
+        // Estilos básicos para tablas si el markdown las genera
+        table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="min-w-full text-left text-sm whitespace-nowrap" {...props} /></div>,
+        th: ({node, ...props}) => <th className="bg-slate-800 font-semibold p-2 border-b border-slate-700 text-slate-200" {...props} />,
+        td: ({node, ...props}) => <td className="p-2 border-b border-slate-800 text-slate-400" {...props} />,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 
   if (view === 'setup') {
     return (
@@ -278,7 +316,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans flex flex-col h-screen overflow-hidden">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0 backdrop-blur-sm">
+      <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0 backdrop-blur-sm z-50">
         <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setView('dashboard')}>
           <Zap className="text-blue-500" />
           <span className="font-bold text-lg tracking-tight">Prompt Coach</span>
@@ -299,7 +337,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-8 animate-in fade-in duration-500">
             <div className="max-w-5xl mx-auto">
               <h2 className="text-3xl font-bold mb-2 text-white">Selecciona tu Área</h2>
-              <p className="text-slate-400 mb-10 text-lg">La IA generará un desafío único basado en situaciones reales.</p>
+              <p className="text-slate-400 mb-10 text-lg">Entrena con situaciones reales que incluyen logs, datos y contextos complejos.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                 {Object.values(ROLES).map((role) => (
                   <button
@@ -319,6 +357,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              
               <div className="border-t border-slate-800 pt-8">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-300">
                   <History size={18} className="text-slate-500" />
@@ -329,18 +368,13 @@ export default function App() {
                     <div key={h.id} className="bg-slate-900/50 hover:bg-slate-900 p-4 rounded-lg border border-slate-800 flex justify-between items-center transition-colors">
                       <div className="flex-1 min-w-0 pr-4">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">{h.role}</span>
-                        <p className="text-sm text-slate-300 truncate">{h.scenario}</p>
+                        <p className="text-sm text-slate-300 truncate opacity-50">Escenario completado...</p>
                       </div>
                       <div className={`px-3 py-1 rounded-md text-sm font-bold border ${h.coachData.score >= 80 ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
                         {h.coachData.score} pts
                       </div>
                     </div>
                   ))}
-                  {history.length === 0 && (
-                    <div className="p-8 text-center bg-slate-900/30 rounded-lg border border-slate-800 border-dashed">
-                      <p className="text-slate-500 text-sm">Aún no has completado ningún desafío.</p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -348,7 +382,8 @@ export default function App() {
         )}
 
         {view === 'arena' && (
-          <div className="flex-1 h-full overflow-y-auto animate-in slide-in-from-right-8 duration-500 bg-slate-950">
+          <div className="flex-1 h-full overflow-y-auto animate-in slide-in-from-right-8 duration-500 bg-slate-950 scroll-smooth">
+            
             <div className="bg-slate-900 border-b border-slate-800 p-6 shadow-sm">
               <div className="max-w-5xl mx-auto">
                 <div className="flex items-center gap-2 mb-3">
@@ -360,11 +395,13 @@ export default function App() {
                      {selectedRole?.label}
                    </span>
                 </div>
-                <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-xl">
-                  <h2 className="text-lg font-medium text-blue-100 leading-relaxed">
-                    <span className="text-blue-400 font-bold mr-2 uppercase tracking-wide text-xs block mb-1">Misión Actual:</span>
-                    {currentScenario}
-                  </h2>
+                
+                {/* MISSION BOX RENOVADA CON MARKDOWN */}
+                <div className="bg-gradient-to-b from-blue-900/10 to-blue-900/5 border border-blue-500/20 p-6 rounded-xl shadow-lg">
+                  <div className="flex items-center gap-2 mb-4 text-blue-400 font-bold uppercase tracking-wider text-xs border-b border-blue-500/20 pb-2">
+                    <FileText size={16} /> Misión Activa
+                  </div>
+                  <MarkdownRenderer content={currentScenario} />
                 </div>
               </div>
             </div>
@@ -373,15 +410,15 @@ export default function App() {
               <div className="max-w-5xl mx-auto space-y-8 pb-20">
                 {!result && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-1 shadow-2xl">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-1 shadow-2xl mt-4">
                       <textarea 
                         value={userPrompt}
                         onChange={e => setUserPrompt(e.target.value)}
-                        placeholder={`Escribe aquí tu prompt...`}
-                        className="w-full min-h-[200px] bg-slate-950 rounded-xl p-6 text-slate-200 focus:outline-none resize-none text-base leading-relaxed placeholder:text-slate-600"
+                        placeholder={`Escribe tu prompt para resolver el caso. \n\nPuedes copiar y pegar los datos del archivo simulado si es necesario...`}
+                        className="w-full min-h-[200px] bg-slate-950 rounded-xl p-6 text-slate-200 focus:outline-none resize-none text-base leading-relaxed placeholder:text-slate-600 font-mono"
                       />
                       <div className="p-3 flex justify-between items-center bg-slate-900 rounded-b-xl border-t border-slate-800">
-                        <span className="text-xs text-slate-500 px-2">Presiona enviar para recibir feedback</span>
+                        <span className="text-xs text-slate-500 px-2">Incluye variables o datos del escenario en tu prompt</span>
                         <button 
                           onClick={submitPrompt}
                           disabled={isLoading || !userPrompt.trim()}
@@ -402,7 +439,7 @@ export default function App() {
                 )}
 
                 {result && (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 pt-8">
                     <div className="flex items-center justify-between bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
                       <div><h3 className="text-2xl font-bold text-white mb-2">Análisis del Coach</h3></div>
                       <div className="flex items-center gap-6">
@@ -418,7 +455,9 @@ export default function App() {
                           <p className="text-xs text-slate-500 mb-3 font-mono font-bold">TU PROMPT:</p>
                           <p className="text-sm text-slate-300 italic mb-6 border-l-2 border-slate-700 pl-4">"{userPrompt}"</p>
                           <p className="text-xs text-slate-500 mb-3 font-mono font-bold">RESULTADO GENERADO:</p>
-                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">{result.userResponse}</div>
+                          <div className="text-sm text-slate-300 bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-96 overflow-y-auto">
+                             <MarkdownRenderer content={result.userResponse} />
+                          </div>
                         </div>
                         <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
                           <h4 className="flex items-center gap-2 text-red-400 font-bold mb-3 text-sm uppercase tracking-wide"><AlertTriangle size={18} /> Áreas de Mejora</h4>
@@ -431,7 +470,9 @@ export default function App() {
                           <p className="text-xs text-emerald-500 mb-3 font-mono font-bold">PROMPT OPTIMIZADO:</p>
                           <p className="text-sm text-emerald-100 italic mb-6 border-l-2 border-emerald-500/30 pl-4">"{result.coach.improved_prompt}"</p>
                           <p className="text-xs text-emerald-500 mb-3 font-mono font-bold">RESULTADO GENERADO:</p>
-                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">{result.improvedResponse}</div>
+                          <div className="text-sm text-slate-300 bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-96 overflow-y-auto">
+                            <MarkdownRenderer content={result.improvedResponse} />
+                          </div>
                         </div>
                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
                           <h4 className="flex items-center gap-2 text-blue-400 font-bold mb-3 text-sm uppercase tracking-wide"><Lightbulb size={18} /> Análisis del Experto</h4>
