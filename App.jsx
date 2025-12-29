@@ -3,8 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   signInAnonymously, 
-  onAuthStateChanged, 
-  signInWithCustomToken 
+  onAuthStateChanged
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -16,33 +15,29 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  Briefcase, 
-  Code2, 
-  Headphones, 
-  Megaphone, 
-  Zap, 
-  Send, 
-  RefreshCw, 
-  CheckCircle2, 
-  AlertTriangle, 
-  ArrowRight,
-  Layout,
-  History,
-  Lightbulb,
-  Award,
-  User
+  Briefcase, Code2, Headphones, Megaphone, Zap, Send, RefreshCw, 
+  CheckCircle2, AlertTriangle, ArrowRight, Layout, History, Lightbulb, Award, User
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
-const firebaseConfig = JSON.parse(__firebase_config);
+// --- 1. CONFIGURACIÓN DE FIREBASE (¡EDITA ESTO!) ---
+// Ve a https://console.firebase.google.com/ > Tu Proyecto > Configuración del Proyecto
+// Copia y pega los valores aquí.
+const firebaseConfig = {
+  apiKey: "TU_API_KEY_DE_FIREBASE_AQUI",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.firebasestorage.app",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+
+// Inicialización segura
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const appId = 'prompt-coach-v1'; // Identificador para la DB
 
-// --- Hardcoded API Key ---
-// NOTA: En un entorno de producción real, usar restricciones de dominio en Google Cloud Console
-// para proteger esta clave, ya que será visible en el código cliente.
+// --- 2. API KEY DE GEMINI (Hardcoded) ---
 const HARDCODED_API_KEY = 'AIzaSyAtpltu7Eufur_JXdvUxvt_EUQ_AqHhmXo';
 
 // --- Roles & System Prompts ---
@@ -82,57 +77,49 @@ const ROLES = {
 };
 
 export default function App() {
-  // State
   const [user, setUser] = useState(null);
-  // Eliminamos el estado apiKey ya que ahora es constante
   const [username, setUsername] = useState(() => localStorage.getItem('pm_username') || '');
-  const [view, setView] = useState('setup'); // setup, dashboard, arena
-  
+  const [view, setView] = useState('setup'); 
   const [selectedRole, setSelectedRole] = useState(null);
   const [currentScenario, setCurrentScenario] = useState(null);
   const [userPrompt, setUserPrompt] = useState('');
-  
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
-  
-  const [result, setResult] = useState(null); // { userResponse, coachAnalysis, improvedResponse }
+  const [result, setResult] = useState(null); 
   const [history, setHistory] = useState([]);
 
-  // --- Auth & Init ---
+  // Auth Init
   useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
+    signInAnonymously(auth).catch((err) => console.error("Error Auth:", err));
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // Check login on load
+  // Auto-login check
   useEffect(() => {
     if (username) {
       setView('dashboard');
     }
   }, [username]);
 
-  // --- History Listener ---
+  // History Listener
   useEffect(() => {
     if (!user) return;
-    const q = query(
-      collection(db, 'artifacts', appId, 'users', user.uid, 'scenarios'),
-      orderBy('timestamp', 'desc')
-    );
-    return onSnapshot(q, (snap) => {
-      setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    try {
+      const q = query(
+        collection(db, 'artifacts', appId, 'users', user.uid, 'scenarios'),
+        orderBy('timestamp', 'desc')
+      );
+      const unsubscribe = onSnapshot(q, (snap) => {
+        setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Firestore error:", e);
+    }
   }, [user]);
 
-  // --- Gemini Helper ---
+  // Gemini Helper
   const callGemini = async (prompt, systemInstruction = '', isJson = false) => {
-    // Usamos la constante HARDCODED_API_KEY
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${HARDCODED_API_KEY}`;
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
@@ -154,8 +141,7 @@ export default function App() {
     return isJson ? JSON.parse(text) : text;
   };
 
-  // --- Actions ---
-
+  // Actions
   const handleSetup = () => {
     if (username.trim()) {
       localStorage.setItem('pm_username', username);
@@ -192,46 +178,38 @@ export default function App() {
     setLoadingText('El Coach está analizando tu estrategia...');
 
     try {
-      // 1. Ejecutar el prompt del usuario (Simulación)
       const simulationPromise = callGemini(
         userPrompt, 
         `Actúa como la herramienta o persona a la que se dirige el usuario en este contexto: ${selectedRole.context}. Contexto del escenario: ${currentScenario}. Responde a su prompt tal cual, sin corregirlos.`
       );
 
-      // 2. Análisis del Coach
       const coachPrompt = `
         Escenario: ${currentScenario}
         Prompt del Usuario: "${userPrompt}"
         Rol del Usuario: ${selectedRole.label}
-        
         Tarea:
         1. Evalúa el prompt del 1 al 100.
         2. Identifica 2 fortalezas y 2 debilidades.
-        3. Reescribe el prompt para que sea PERFECTO (Expert Level) para resolver el escenario.
+        3. Reescribe el prompt para que sea PERFECTO (Expert Level).
         4. Explica POR QUÉ el nuevo prompt es mejor.
-        
         Salida JSON: { "score": number, "critique": string, "improved_prompt": string, "explanation": string }
       `;
       
-      const coachPromise = callGemini(coachPrompt, "Eres un experto Ingeniero de Prompts especializado en herramientas empresariales (Zoho, Google).", true);
+      const coachPromise = callGemini(coachPrompt, "Eres un experto Ingeniero de Prompts.", true);
 
       const [simResponse, coachAnalysis] = await Promise.all([simulationPromise, coachPromise]);
 
-      // 3. Ejecutar el prompt mejorado (para comparar)
       const improvedSimResponse = await callGemini(
         coachAnalysis.improved_prompt,
         `Actúa como la herramienta o persona a la que se dirige el usuario en este contexto: ${selectedRole.context}. Contexto del escenario: ${currentScenario}.`
       );
 
-      const finalResult = {
+      setResult({
         userResponse: simResponse,
         coach: coachAnalysis,
         improvedResponse: improvedSimResponse
-      };
+      });
 
-      setResult(finalResult);
-
-      // 4. Guardar en historial
       if (user) {
         await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'scenarios'), {
           role: selectedRole.label,
@@ -250,8 +228,6 @@ export default function App() {
     }
   };
 
-  // --- Views ---
-
   if (view === 'setup') {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 text-slate-200 font-sans">
@@ -263,7 +239,6 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-bold text-center mb-2">Prompt Coach</h1>
           <p className="text-slate-400 text-center mb-8 text-sm">Entrenamiento de IA para equipos de alto rendimiento.</p>
-          
           <div className="space-y-6">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Nombre de Usuario</label>
@@ -278,7 +253,6 @@ export default function App() {
                 />
               </div>
             </div>
-           
             <button 
               onClick={handleSetup}
               disabled={!username.trim()}
@@ -294,7 +268,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans flex flex-col h-screen overflow-hidden">
-      {/* Navbar */}
       <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0 backdrop-blur-sm">
         <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setView('dashboard')}>
           <Zap className="text-blue-500" />
@@ -311,16 +284,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 overflow-hidden relative flex">
-        
-        {/* Dashboard View */}
         {view === 'dashboard' && (
           <div className="flex-1 overflow-y-auto p-8 animate-in fade-in duration-500">
             <div className="max-w-5xl mx-auto">
               <h2 className="text-3xl font-bold mb-2 text-white">Selecciona tu Área</h2>
-              <p className="text-slate-400 mb-10 text-lg">La IA generará un desafío único basado en situaciones reales de tu departamento.</p>
-              
+              <p className="text-slate-400 mb-10 text-lg">La IA generará un desafío único basado en situaciones reales.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                 {Object.values(ROLES).map((role) => (
                   <button
@@ -340,8 +309,6 @@ export default function App() {
                   </button>
                 ))}
               </div>
-
-              {/* History Preview */}
               <div className="border-t border-slate-800 pt-8">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-300">
                   <History size={18} className="text-slate-500" />
@@ -370,10 +337,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Arena View */}
         {view === 'arena' && (
           <div className="flex-1 flex flex-col h-full overflow-hidden animate-in slide-in-from-right-8 duration-500">
-            {/* Top: Scenario */}
             <div className="bg-slate-900 border-b border-slate-800 p-6 shadow-sm shrink-0">
               <div className="max-w-5xl mx-auto">
                 <div className="flex items-center gap-2 mb-3">
@@ -394,136 +359,81 @@ export default function App() {
               </div>
             </div>
 
-            {/* Middle: Work Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
               <div className="max-w-5xl mx-auto space-y-8 pb-20">
-                
-                {/* Input Section */}
                 {!result && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-slate-900 rounded-2xl border border-slate-800 p-1 shadow-2xl">
                       <textarea 
                         value={userPrompt}
                         onChange={e => setUserPrompt(e.target.value)}
-                        placeholder={`Escribe aquí tu prompt para resolver el caso... \n\nTip: Sé específico con el contexto y el formato deseado.`}
+                        placeholder={`Escribe aquí tu prompt...`}
                         className="w-full min-h-[200px] bg-slate-950 rounded-xl p-6 text-slate-200 focus:outline-none resize-none text-base leading-relaxed placeholder:text-slate-600"
                       />
                       <div className="p-3 flex justify-between items-center bg-slate-900 rounded-b-xl border-t border-slate-800">
-                        <span className="text-xs text-slate-500 px-2">Presiona enviar para recibir feedback instantáneo</span>
+                        <span className="text-xs text-slate-500 px-2">Presiona enviar para recibir feedback</span>
                         <button 
                           onClick={submitPrompt}
                           disabled={isLoading || !userPrompt.trim()}
                           className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/25"
                         >
-                          {isLoading ? (
-                            <RefreshCw className="animate-spin" size={20} />
-                          ) : (
-                            <Send size={20} />
-                          )}
+                          {isLoading ? <RefreshCw className="animate-spin" size={20} /> : <Send size={20} />}
                           {isLoading ? 'Analizando...' : 'Enviar Prompt'}
                         </button>
                       </div>
                     </div>
                     {isLoading && (
                        <div className="text-center mt-12">
-                         <div className="inline-block p-4 rounded-full bg-slate-900 border border-slate-800 mb-4 animate-bounce">
-                           <Zap className="text-blue-500" size={24} />
-                         </div>
+                         <div className="inline-block p-4 rounded-full bg-slate-900 border border-slate-800 mb-4 animate-bounce"><Zap className="text-blue-500" size={24} /></div>
                          <p className="text-slate-400 animate-pulse font-medium">{loadingText}</p>
                        </div>
                     )}
                   </div>
                 )}
 
-                {/* Results Section */}
                 {result && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    
-                    {/* Score Card */}
                     <div className="flex items-center justify-between bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
-                      <div>
-                        <h3 className="text-2xl font-bold text-white mb-2">Análisis del Coach</h3>
-                        <p className="text-slate-400">Aquí tienes el desglose de tu desempeño en esta simulación.</p>
-                      </div>
+                      <div><h3 className="text-2xl font-bold text-white mb-2">Análisis del Coach</h3></div>
                       <div className="flex items-center gap-6">
                         <div className="text-right">
-                          <div className={`text-5xl font-black ${result.coach.score >= 80 ? 'text-green-400' : 'text-amber-400'}`}>
-                            {result.coach.score}
-                          </div>
+                          <div className={`text-5xl font-black ${result.coach.score >= 80 ? 'text-green-400' : 'text-amber-400'}`}>{result.coach.score}</div>
                           <div className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Puntaje</div>
-                        </div>
-                        <div className={`w-20 h-20 rounded-full border-4 flex items-center justify-center ${result.coach.score >= 80 ? 'border-green-500/30 text-green-500 bg-green-500/10' : 'border-amber-500/30 text-amber-500 bg-amber-500/10'}`}>
-                          <Award size={40} />
                         </div>
                       </div>
                     </div>
-
-                    {/* Comparison Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      
-                      {/* Left: User Attempt */}
                       <div className="space-y-6">
-                        <div className="flex items-center gap-2 text-slate-400 text-sm font-bold uppercase tracking-wider">
-                          <div className="w-2 h-2 rounded-full bg-slate-500"></div>
-                          Tu Estrategia
-                        </div>
                         <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 opacity-90">
                           <p className="text-xs text-slate-500 mb-3 font-mono font-bold">TU PROMPT:</p>
                           <p className="text-sm text-slate-300 italic mb-6 border-l-2 border-slate-700 pl-4">"{userPrompt}"</p>
-                          
                           <p className="text-xs text-slate-500 mb-3 font-mono font-bold">RESULTADO GENERADO:</p>
-                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">
-                            {result.userResponse}
-                          </div>
+                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">{result.userResponse}</div>
                         </div>
-                        
-                        {/* Critique */}
                         <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
-                          <h4 className="flex items-center gap-2 text-red-400 font-bold mb-3 text-sm uppercase tracking-wide">
-                            <AlertTriangle size={18} /> Áreas de Mejora
-                          </h4>
+                          <h4 className="flex items-center gap-2 text-red-400 font-bold mb-3 text-sm uppercase tracking-wide"><AlertTriangle size={18} /> Áreas de Mejora</h4>
                           <p className="text-sm text-red-100/80 leading-relaxed">{result.coach.critique}</p>
                         </div>
                       </div>
-
-                      {/* Right: Coach Attempt */}
                       <div className="space-y-6">
-                         <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold uppercase tracking-wider">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                          Estrategia Experta
-                        </div>
                         <div className="bg-slate-900 rounded-xl border border-emerald-500/30 p-6 shadow-2xl shadow-emerald-900/10 relative overflow-hidden">
                           <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                           <p className="text-xs text-emerald-500 mb-3 font-mono font-bold">PROMPT OPTIMIZADO:</p>
                           <p className="text-sm text-emerald-100 italic mb-6 border-l-2 border-emerald-500/30 pl-4">"{result.coach.improved_prompt}"</p>
-                          
                           <p className="text-xs text-emerald-500 mb-3 font-mono font-bold">RESULTADO GENERADO:</p>
-                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">
-                            {result.improvedResponse}
-                          </div>
+                          <div className="text-sm text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800/50 max-h-60 overflow-y-auto">{result.improvedResponse}</div>
                         </div>
-
-                         {/* Explanation */}
                          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
-                          <h4 className="flex items-center gap-2 text-blue-400 font-bold mb-3 text-sm uppercase tracking-wide">
-                            <Lightbulb size={18} /> Análisis del Experto
-                          </h4>
+                          <h4 className="flex items-center gap-2 text-blue-400 font-bold mb-3 text-sm uppercase tracking-wide"><Lightbulb size={18} /> Análisis del Experto</h4>
                           <p className="text-sm text-blue-100/80 leading-relaxed">{result.coach.explanation}</p>
                         </div>
                       </div>
-
                     </div>
-
                     <div className="flex justify-center pt-12 pb-20">
-                      <button 
-                        onClick={() => setView('dashboard')}
-                        className="group bg-slate-800 hover:bg-slate-700 text-white px-10 py-4 rounded-full font-bold transition-all border border-slate-700 hover:border-slate-500 hover:scale-105 flex items-center gap-3 shadow-xl"
-                      >
-                        <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500"/>
-                        Nuevo Entrenamiento
+                      <button onClick={() => setView('dashboard')} className="group bg-slate-800 hover:bg-slate-700 text-white px-10 py-4 rounded-full font-bold transition-all border border-slate-700 hover:border-slate-500 hover:scale-105 flex items-center gap-3 shadow-xl">
+                        <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500"/> Nuevo Entrenamiento
                       </button>
                     </div>
-
                   </div>
                 )}
               </div>
